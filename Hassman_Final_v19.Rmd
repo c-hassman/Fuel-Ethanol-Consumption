@@ -1,0 +1,637 @@
+---
+title: "Forecasting Fuel Ethanol Consumption"
+shorttitle        : "Fuel Ethanol Consumption"
+author: 
+  - name          : "Colburn Hassman"
+    affiliation   : ""
+    corresponding : yes    # Define only one corresponding author
+    address       : "Department of Agricultural & Applied Economics, Virginia Tech"
+    email         : "colburn7@vt.edu"
+
+
+date: "Spring 2020"
+affiliation:
+  -  institution   : "Virginia Tech"
+abstract: |
+    Accurately modeling fuel ethanol consumption is of utmost important to ethanol producers, merchants, and agricultural traders. This is especially true because biofuel consumption exhibits both trend and seasonality. This paper investigates multiple time series forecastig methods for estimating fuel ethanol consumption in the United States. The models analyzed range in complexity from mean forecasting method to Neural Network Autoregression. After specifying each model, time series cross validation techniques are used to test forecasting accuracy.
+    
+keywords          : "Ethanol, Time Series Modelling, Fuel Consumption, Forecasting"
+class             : english
+floatsintext      : yes     # Whether figures and tables should be included in the document or after
+figurelist        : yes      # Include a list of figures?
+tablelist         : no      # Include a list of tables?
+footnotelist      : no      # Include a footnote list?
+linenumbers       : no      # NUmber each line of the manuscript
+fontsize          : 12pt    # set the font size
+
+documentclass     : "apa6"
+classoption       : doc
+output            : 
+  papaja::apa6_pdf:
+    keep_tex      : FALSE
+
+header-includes:
+  - \usepackage{setspace}
+  - \AtBeginEnvironment{tabular}{\onehalfspacing} # Single spacing between table rows
+  - \captionsetup[table]{font={stretch=1.5}}      # How far should the table captions spread
+  - \captionsetup[figure]{font={stretch=1}}       # How far should the figure captions spread
+  - \geometry{margin = 1in}                       # Set the page to 1in all round.
+  - \raggedbottom
+bibliography: references.bib
+
+---
+
+
+```{r setup, include=FALSE}
+library(papaja)
+library(readxl)
+library(fpp2)
+library(ggthemes)
+library(gt)
+library(tidyverse)
+```
+
+```{r data_pull, echo=FALSE}
+data <- read_excel("Fuel_Ethanol_Consumption.xlsx", 
+    sheet = "Sheet2", col_types = c("date", "numeric"))
+data_ts <- ts(data$Data, frequency = 12, end = c(2020, 2))
+```
+
+
+# Introduction
+
+Unstable geopolitical situations culminating the 1973 US Oil Crisis prompted a reinvigoration of the biofuels sector in the United States. Dependance of foreign energy imports from unreliable or hostile trading partners became politically unconscionable. Biofuels were seen by some as an ideal solution; a completely domestic fuel which simultaneously supported rural America  [@RFS]. As fossil fuel extraction technology has progressed, the United States has become a net exporter of crude oil. While US dependance on foreign oil has waned, enviromental and political activists continue to support ethanol for a myriad of reasons. A March 2019 study released by the USDA found that the life-cycle greenhouse gas emissions for corn ethanol were approximately 40% less than that of gasoline [@greenhouse]. In the March 2020 World Agriculture Supply and Demand Estimate (WASDE) Report, the USDA estimated that ethanol use accounted for 44% of US domestic corn consumption [@WASDE]. A March 2018 report from the USDA attributed more than 86,000 jobs directly to the ethanol industry, along with 270,000 indirect jobs [@bioindo]. Many of these jobs are in rural areas where ethanol remains a highly politiziced issue. 
+
+In support of the biofuels industry, the Energy Policy Act of 2005 established the Renewable Fuel Standard (RFS), mandating that fuel used for transportation contain a mininmum volume of renewable fuel. This legislation directed the EPA to administer a program to increase the amount of biofuels used for transportation from 4.0 billion gallons in 2006 to 36.0 billion gallons in 2022. Program compliance is regulated via tradable renewable identification number (RINs) credits, which are based on the energy content of the fuel [@RFS].
+
+Growth in ethanol blended into gasoline has slowed in recent years. Currently the amount of ethanol blended into gasoline is around 10 percent, close to the so called "Ethanol Blendwall". Ethanol contains approximately 33% less energy per volume than pure gasoline[@ethanol_over].  For this reasons and others, older vehicles cannot use fuel with more than 10% ethanol content by volume. In 2019, the EPA finalized regulatory changes to allow gasoline blended with up to 15 percent ethanol (E15) year round [@rfs_rule]. This updated regulation is unlikley to translate to an immediate increase in consumption, as the EPA has previously identify the lack of ethanol infastructure as the binding constraint for ethanol consumption growth [@epa_rule].
+
+In support of the oil industry and to the frustration of biofuels, certain energy refiners are exempt from the RIN credit mandate through Small Refinery Exceptions (SREs). Reducing RIN credit demand means lowering RIN credit prices, which reduces the incentive to increase ethanol blending, which harms corn demand. In 2017, the EPA granted 1.63 billion gallons worth of exemptions. The Renewable Fuel Association estimated that this reduced corn consumption by 1.96 billion dollars (assuming 3.50 dollars per bushel) [@SME]. 
+
+Future growth in ethanol consumption may be brought about by increased E85 consumption which in turn may be brought about by infastructure expansion and favorable relative prices. Currently, the majority of E85 is consumed in PADD 2, which encompasses the Midwest United States, where the vast majority of ethanol is produced and where the majority of US corn is grown. Growing ethanol exports and decreasing the amount of SREs may serve as an additional source of demand. 
+
+This paper examines multiple models to forecast fuel ethanol consumption in the United States with intent of comparing their accuracy for multiple forecasting horizons. Accurately forecasting ethanol consumption is an important task for ethanol producers, merchants, regulators, corn market participants, and exporters. Because the a large portion of US corn is processed into ethanol, and the United States is such a large participant in global corn markets, international participants also have incentive to accurately forecast consumption.
+
+The following is organizes in multiple sections. The first section, Data, explores the dataset used in this analysis. The second, Model Descriptions, specifys and discusses each model used in the analysis. The Accuracy Measurement section describes the methodology and metrics for evaluating forecasting effectiveness. The Results section shares the findings of the research while the final section, c
+Conclusion, discusses the results suggests additional research topics.
+
+# Data
+
+```{r plot1, echo=FALSE, fig.height= 3}
+autoplot(data_ts) + theme_bw() + ggtitle("Fuel Ethanol Consumption") + 
+  ylab("Avg. Daily Consumption (MM Barrels)") +
+  xlab("") + labs(caption = "Visualization 1: Fuel Ethanol Consumption")
+```
+
+
+```{r acfplot1,echo=FALSE, fig.height=2}
+ggAcf(data_ts) + ggtitle("Fuel Ethanol Consumption", subtitle = "ACF Plot") + theme_bw() + 
+  labs(caption = "Visualization 2: Fuel Ethanol Consumption ACF Plot")
+```
+
+The data used is monthly fuel ethanol consumption reported in million barrels per day by the US energy Information Administration. [@eia_data] The data spanned from January 2010 to February 2020 (n=122). Based on the ACF and subseries plots, the data exhibits seasonality for which an accurate model will need to account for. 
+
+```{r subseriesplot, echo=FALSE, fig.height=2.5}
+ggsubseriesplot(data_ts) + ggtitle("Fuel Ethanol Consumption", subtitle = "Subseries Plot") + theme_bw() +
+  ylab("") + labs(caption = "Visualization 3: Fuel Ethanol Consumption Subseries Plot")
+```
+
+
+
+# Model Descriptions
+
+The following are analysis of the ten models used in this paper. For each model, a formal mathematical specification is offered, as well as a discussion of the merits and shortcomings of the model type. 
+
+## (i) Average Method
+
+The forecast of all future values are simply the average of the historical data. Best used for stochastic mean reverting data. This method is one of the simpliest and is often used as a benchmark to compare more complex models.This model is inappropriate for data displaying trend, and generally a poor fit for data displaying seasonality. 
+
+$$\hat{y}_{T + h|T} = \overline{y} = \frac{(y_{1}+ ... + y_{T})}{T} $$
+
+## (ii) Naive Method
+
+The Naive Methods uses the previous observation at the forecast. Along with the average method, it serves as the benchmark to judge all other forecasts by. The naive method is often a good forecasting method over very short forecasting horizons, but the accuracy tends to quickly diminish as the horizon is extended.
+
+$$ \hat{y}_{T+h|T} = y_{T} $$
+
+## (iii) Random Walk Method with Drift
+
+A random walk is a stochastic process. Like the naive, we generally assume that the best forecast for $t = t_{t-1}$. In this case however, we account for a trend (drift) in the data. This method accounts for trend but not seasonality. 
+
+$$ \hat{y}_{T+h|T} = y_{T} + \frac{h}{T-1}\sum_{t=2}^T (y_{t}-y_{t-1}) = y_{T} + h \left( \frac{y_{T} -y_{1}}{T-1}\right)$$
+
+
+## (iV) Seasonal Naive
+
+The seasonal naive method is very useful for highly seasonal data. For each future season, it uses the previous season's value as the forecast. This model is appropriate for highly seasonal data with little trend. The simplicity of this model means that the data requirement is small.
+
+$$\hat{y}_{T+h|T} = y_{T+h-m(k+1)}$$
+
+
+## (v) ETS
+
+The *Error, Trend, Seasonal* (ETS) forecasting method is a flexible framework which decomposes the timeseries into distinct components. 
+
+
+$$ y_t = T_t + S_{t} + R_t $$
+It's flexibility comes from the ability to account for Additive and Multiplicative Errors, Trends, and Seasons, as well as dampened Trends. 
+
+
+
+```{r}
+Trend <- c("N (None)", "A (Additive)", "Ad (Additive Damped)", "M (Multiplicative)", "Md (Multiplicative Damped)")
+No_Season <- c("NN", "AN", "AdN", "MN", "MdN")
+Additive_Season <- c("NA", "AA", "AdA", "MA", "MdA")
+Multi_Season <- c("NM", "AM", "AdM", "MM", "MdM")
+
+tab <- cbind(Trend, No_Season, Additive_Season, Multi_Season)
+tab <- gt(tab) %>% tab_header(title = "ETS Model", subtitle = "Specifications")
+tab <- tab %>% cols_label(
+  Trend = "Trend type",
+  No_Season = "No Seasonality", 
+  Additive_Season = "Additive Seasonality", 
+  Multi_Season = "Multiplicative Seasonality"
+)
+tab <- tab %>% tab_source_note(
+  source_note = "Table 1: ETS Model Specifications"
+)
+tab
+```
+
+The proper model specification can be automatically choosen using the AIC.
+
+## (vi) Holt
+
+The Holt method is a linear trend forecasting method based on simple exponential smoothing.
+
+\begin{align*}
+  \text{Forecast equation}&& \hat{y}_{t+h|t} &= \ell_{t} + hb_{t} \\
+  \text{Level equation}   && \ell_{t} &= \alpha y_{t} + (1 - \alpha)(\ell_{t-1} + b_{t-1})\\
+  \text{Trend equation}   && b_{t}    &= \beta^*(\ell_{t} - \ell_{t-1}) + (1 -\beta^*)b_{t-1},
+\end{align*}
+
+$l_{t}$ is the estimate of the level of the series at time $t$ and $\beta_{t}$ is the estimate of the trend of the series. $\alpha$ is the smoothing parameter which is between 0 and 1. The larger the $\alpha$, the more weight the model puts on recent variables. Using exponential smoothing often more accurately captures changing trends. A dampened variation of this model is used when linear forecasts are inappropriate. 
+
+## (vii) Holt-Winter
+
+The Holt-Winter model extends the original holt model to include a seasonality parameter $\gamma$ over $m$ seasons. Here is both an additive and multiplicative method depending on the type of seasonality.
+
+\begin{align*}
+  \hat{y}_{t+h|t} &= \ell_{t} + hb_{t} + s_{t+h-m(k+1)} \\
+  \ell_{t} &= \alpha(y_{t} - s_{t-m}) + (1 - \alpha)(\ell_{t-1} + b_{t-1})\\
+  b_{t} &= \beta^*(\ell_{t} - \ell_{t-1}) + (1 - \beta^*)b_{t-1}\\
+  s_{t} &= \gamma (y_{t}-\ell_{t-1}-b_{t-1}) + (1-\gamma)s_{t-m},
+\end{align*}
+
+where $k = \frac{h-1}{m}$
+
+$\gamma$ is restricted to $0 \le \gamma \le 1- \alpha$
+
+## (viii) ARIMA(p,d,q)
+
+ARIMA models are the differenced combination of autoreggressive and moving average models. 
+
+\begin{equation}
+  y'_{t} = c + \phi_{1}y'_{t-1} + \cdots + \phi_{p}y'_{t-p}
+     + \theta_{1}\varepsilon_{t-1} + \cdots + \theta_{q}\varepsilon_{t-q} + \varepsilon_{t}
+\end{equation}
+
+where $y'$ is the differenced series. These types of models are defined by three paramters (p,d,q).
+
+* $p =$ order of the autoregressive part
+* $d =$ degree of first differencing involved
+* $q =$ order of the moving average part
+
+There are several cases where ARIMA specifications are identical to models previously discussed. 
+
+\newpage
+
+```{r}
+Model <- c("White Noise", "Random Walk", "Random Walk with Drift", "Autoregression", "Moving Average")
+Specification <- c("ARIMA(0,0,0)", "ARIMA(0,1,0) with no constant", "ARIMA(0,1,0) with a constant", "ARIMA(p,0,0)", "ARIMA(0,0,q)")
+
+tab <- cbind(Model, Specification)
+tab <- gt(tab) %>% tab_header(title = "ARIMA Model Specifications", subtitle = "Special Cases")
+tab <- tab %>% tab_source_note(
+  source_note = "Table 2: ARIMA Model Specifications"
+)
+tab
+```
+
+The ARIMA framework is especially usefil because of its flexibility. The auto.arima function in the fpp2 function automatically selects the model specification to maximize AIC. 
+
+## (ix) Bootstrapping
+
+Bootstrapping time series refers to generating new time series which have similiar charactersitics as our original time series. This is often use to calculate better prediction intervals, as most prediction intervals from time series models are too narrow.Bootstrapping allows for uncertainty not only in the random error term, but also in the parameter estimates. 
+
+We can also use bootstrapping to improve forecast accuracy by producing forecasts from the bootstrapped timeseries and average together the forecasts. This is called bagging (bootstrap aggregating) and has been show to produce more accurate models. 
+
+```{r bootstrap_ex, fig.height=3, echo=FALSE, warning=FALSE, message=FALSE}
+bootseries <- bld.mbb.bootstrap(data_ts, 5) %>%
+  as.data.frame() %>% ts(start=2010, frequency=12)
+autoplot(data_ts) +
+  autolayer(bootseries, colour=TRUE) +
+  autolayer(data_ts, colour=FALSE) +
+  ylab("Bootstrapped series") + guides(colour="none") + theme_bw() +
+  ggtitle("Boostrapped Fuel Ethanol Consumption Timeseries") +
+  labs(caption = "Visualization 4: Bootstrapped Timeseries")
+
+```
+
+Computational constraints limit the number of simulations run, but the method is included as an improvement of a more basic model.
+
+
+## (x) Neural Networks
+
+Nueral Networks function by introducing a hidden layer of "neurons" to the model. This allows modeling of complex, nonlinear relaitonships. 
+
+![Neural Network Diagram](Neural_Diagram.png){width=50%}
+
+The figure above depicts a *multilayer feed-forward network* where each layer of nodes recieved inputs from the precious layer. The inputs from each node are weighted and linearly combined. The result is then modified by a nonlinear function. The values of the weightings are often restricted by a "decay parameter" which is often set to 0.1.
+
+In timeseries data, lagged variables of the time series can be used as inputs to a neural network to create a Neural Network Autoregression (NNAR) Model, the nonlinear cousin of a linear autoregression model. Generally, the model is defined as $$NNAR(p,P,k)m $$ where $p$ = the number of lagged inputs, $P$ indicates seasonality, and $k$ is the number of neurons in the hidden layer. 
+
+The function *nnetar()* will fit an NNAR model automatically, setting $P=1$ for seasonal data, choosing the optimal number of lags ($p$) based on AIC, and setting $k=\frac{p+P+1}{2}$ rounded to the nearest integar. Forecasting is done iteratively.
+
+The benefit of neural networks is that it can easily incorporate nonlinear and complex interactions which other models may be unable to include. The costs of modeling these intereactions is significant data needs and a model opacity.
+
+# Accuracy Measurement
+I have choosen a forecast horizon of 12 months (h = 12). This insures that the model forecasts are full cycle of seasonality. 
+
+Rather than divide the data into a fitting and validation set to measure model accuracy, Time Series Cross Validation (TSCV) is employed. TSCV evaluates the forecast accuracy over a rolling forecasting origin, with more and more of the data being included in the training set. 
+
+![Illustration of Time Series Cross Validation](TSCV_Diagram.png){width=50%}
+
+The tsCV function provided in the fpp2 is very useful, but it is necessary to make some minor alterations to be able to use with certain models which do not return a forecast set.
+
+Using tscv increases our confidence in the models as it is equivalent to having the maximum amount of training and testing sets given data constraints. 
+
+## Accuracy Metrics
+
+Four metrics are used to measure forecasting accuracy; Mean Absolute Error (MAE), Mean Square Error (MSE), Root Mean Square Error (RMSE), and Mean Absolute Percent Error (MAPE). Lower error metric values indicate a better goodness-of-fit. 
+
+### Mean Absolute Error
+$$MAE = \frac{\sum\limits_{t = 1}^{T} |\hat{y_{t}} - y_{t}|}{t}$$
+
+### Mean Square Error
+$$MSE = \frac{1}{T}\sum\limits_{t = 1}^{T}{(\hat{y_{t}}-y_{t})^2} $$
+
+### Root Mean Square Error
+
+$$RMSE = \sqrt{\sum_{t = 1}^{T}{\frac{(\hat{y_{t}}-y_{t})^2}{T}}} $$
+Root Mean Square Error is the standard deviation of the errors. 
+
+### Mean Absolute Percent Error
+
+$$ MAPE = \frac{1}{t}\sum_{t=1}^{T}|\frac{y_{t}- \hat{y_{t}}}{y_{t}}| $$
+The MAPE is the average absolute error as a percent, of the actual value. 
+
+# Results
+
+```{r meanf, fig.height=2.8, echo = FALSE, warning=FALSE}
+#Mean
+e <- tsCV(data_ts, meanf, h=12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+meand <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+meand1 <- round(accuracy(meanf(data_ts))[c(2,5)],5)
+```
+
+```{r naive, fig.height=2.8, echo =FALSE , warning=FALSE}
+# Naive
+e <- tsCV(data_ts, naive, h=12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+naive <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+naive1 <- round(accuracy(naive(data_ts))[c(2,5)],5)
+```
+
+```{r randwd, fig.height=2.8, echo = FALSE, warning=FALSE}
+#Random Walk with Drift
+e <- tsCV(data_ts, rwf, drift=TRUE, h=12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+randwd <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+randwd1 <- round(accuracy(rwf(data_ts, drift = TRUE))[c(2,5)],5)
+```
+
+```{r snaive, fig.height=2.8, echo=FALSE, warning=FALSE}
+#Seasonal Naive
+e <- tsCV(data_ts, snaive, h=12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+snaived <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+snaived1 <- round(accuracy(snaive(data_ts))[c(2,5)],5)
+```
+
+```{r ets, fig.height=2.8, echo=FALSE, warning=FALSE}
+far2 <- function(x, h){forecast(x, h=h)}
+e <- tsCV(data_ts, far2, h = 12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+etsd <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+etsd1 <- round(accuracy(forecast(data_ts))[c(2,5)],5)
+```
+
+```{r holt, fig.height=2.8, echo=FALSE, warning=FALSE}
+e <- tsCV(data_ts, holt, h=12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+holtd <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+holtd1 <- round(accuracy(holt(data_ts))[c(2,5)],5)
+```
+
+```{r holtwinter, fig.height=2.8, echo=FALSE, warning=FALSE}
+e <- tsCV(data_ts, hw, h=12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+holtw <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+holtw1 <- round(accuracy(hw(data_ts))[c(2,5)],5)
+```
+
+```{r arima, fig.height=2.8, echo=FALSE, warning=FALSE}
+far2 <- function(x, h){forecast(auto.arima(x), h=h)}
+e <- tsCV(data_ts, far2, h = 12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+arimad <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+arimad1 <- round(accuracy(Arima(data_ts, order=c(0,1,1), seasonal = c(0,1,1)))[c(2,5)],5)
+```
+
+```{r bootstrap, fig.height=2.8, echo=FALSE, warning=FALSE}
+fit <- baggedETS(data_ts, bootstrapped_series = bld.mbb.bootstrap(data_ts, 2))
+
+far2 <- function(x, h){forecast(baggedETS(x, bootstrapped_series = bld.mbb.bootstrap(x, 2)), h=h)}
+e <- tsCV(data_ts, far2, h = 12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+bagetsd <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+bagetsd1 <- round(accuracy(forecast(fit))[c(2,5)],5)
+```
+
+```{r nnetwork, fig.height=2.8, echo=FALSE, warning=FALSE}
+far2 <- function(x, h){forecast(nnetar(data_ts), h=h)}
+e <- tsCV(data_ts, far2, h = 12)
+mae <- colMeans(abs(e), na.rm = TRUE)
+mse <- colMeans(e^2, na.rm = TRUE)
+rmse <- sqrt(colMeans(e^2, na.rm = TRUE))
+nnard <- data.frame(h = 1:12, MAE = mae, MSE = mse, RMSE = rmse) 
+
+nnard1 <- round(accuracy(forecast(fit))[c(2,5)],5)
+```
+
+
+```{r insampcomp, echo=FALSE, warning = FALSE}
+lab <- c("RMSE", "MAPE")
+tab <- rbind(meand1, naive1, randwd1, snaived1, etsd1,
+             holtd1, holtw1, arimad1, bagetsd1, nnard1)
+models <- c("Mean", "Naive", "Random Walk", "Seasonal Naive", "ETS",
+            "Holt", "Holt-Winters", "ARIMA", "Bagged ETS", "NNAR")
+tab <- cbind(models, tab)
+tab <- gt(tab) %>% cols_label(
+  models = "Models",
+  V2 = "RMSE", 
+  V3 = "MAPE"
+)
+tab <- tab %>% tab_header(title = "Goodness-of-fit Metrics", subtitle = "In-Sample")
+tab <- tab %>% tab_source_note(
+  source_note = "Table 3: Goodness-of-fit Metric Comparision"
+)
+tab
+```
+
+Using the tscv method, the ETS, bagged ETS, Holt, Holt-Winter, and ARIMA model specifications are automatically choosen for each training set iteration to maximize the Akaike Infromation Criterion (AIC). Thus, the  model specifications and parameter estimates will vary with the data used to train. Certain specifications were made beforehand. For example, the ETS models were specified to account for additive seasonality. This was choosen because the maginitude of seasonality displayed by the data does not vary significantly within the sample. 
+
+
+Using the entire dataset to fit a model, the ETS model includes seasonality. Thus the final model specifications are 
+
+\begin{align*}
+  \text{Forecast equation}&& \hat{y}_{t} = l_{t-1} + b_{t-1} s_{t-m} + \epsilon_{t} \\
+  \text{Level equation}   && l_{t} = l_{t-1} + b_{t-1} + \alpha\epsilon_{t} \\
+  \text{Trend equation}   && b_{t} = b_{t-l} + \beta\epsilon_{t} \\
+  \text{Seasonality Equation} && s_{t}=  s_{t-m} + \gamma\epsilon_{t} ,
+\end{align*}
+
+With parameter estimates of $\alpha = 0.1248$, $\beta = 0.0001$, and $\gamma = 0.0153$, and $m = 12$.
+
+The Holt model has smoothing parameter estimates of $\alpha = 0.2224$ and $\beta = 0.0001$. The Holt-Winters Model, which like accounts for seasonality, yields smoothing parameter estimates of $\alpha = 0.0995$, $\beta = 0.0134$, and $\gamma = 0.0004$. 
+
+The ARIMA model specification which maximizes AIC accounts for seasonality and is defined as ARIMA(0,1,1)(0,1,1) with $m = 12$. 
+
+The preferred model based on the in-sample accuracy statistics in the ARIMA model, which has the smallest errors. Models which include seasonal components have better goodness-of-fits than models which do not. The forecasting method with the poorest accuracy metrics is the mean method, which is unsurprising given both seasonality and trend. 
+
+
+```{r summaryerror, echo = FALSE}
+Model <- c("Mean", "Naive", "Random Walk", "Seasonal Naive", 
+            "ETS", " Holt", "Holt Winters", "ARIMA","Bagged ETS", "NNAR")
+MAE <- c(round(mean(meand$MAE),5) , round(mean(naive$MAE),5), 
+         round(mean(randwd$MAE),5), round(mean(snaived$MAE),5),
+         round(mean(etsd$MAE),5), round(mean(holtd$MAE),5),
+         round(mean(holtw$MAE),5), round(mean(arimad$MAE),5), 
+         round(mean(bagetsd$MAE),5), round(mean(nnard$MAE),5))
+
+MSE <- c(round(mean(meand$MSE),5) , round(mean(naive$MSE),5),
+         round(mean(randwd$MSE),5),round(mean(snaived$MSE),5),
+         round(mean(etsd$MSE),5), round(mean(holtd$MSE),5),
+         round(mean(holtw$MSE),5), round(mean(arimad$MSE),5),
+         round(mean(bagetsd$MSE),5), round(mean(nnard$MSE),5))
+
+RMSE <- c(round(mean(meand$RMSE),5) , round(mean(naive$RMSE),5), 
+          round(mean(randwd$RMSE),5), round(mean(snaived$RMSE),5),
+          round(mean(etsd$RMSE),5), round(mean(holtd$RMSE),5),
+          round(mean(holtw$RMSE),5), round(mean(arimad$RMSE),5), 
+          round(mean(bagetsd$RMSE),5), round(mean(nnard$RMSE),5))
+
+tab <- cbind(Model, MAE, MSE, RMSE)
+tab <- gt(tab) %>% tab_header(title = "TSCV Accuracy Statistics",
+                          subtitle = "Model Comparision")
+tab <- tab %>% tab_source_note(
+  source_note = "Table 4: Cross-Validation Accuracy Metrics"
+)
+tab
+
+```
+
+The above table includes averages of the goodness-of-fit metrics calculated from tscv. It is the average of the error from all forecasting horizons from all the training set iterations used. Based on this, the preferred model based on best fit is again the ARIMA model, followed by the Bagged ETS model. 
+
+
+
+```{r modelcomprmse, fig.height=4, echo=FALSE, warning=FALSE}
+
+keycol <- "model"
+valuecol <- "value"
+gathercols <- c("Mean", "Naive", "RandomWalk", "Seas_Naive", "Holt","HoltWinters",
+                "ARIMA", "ETS", "Bagged_ETS", "NNAR")
+rmse <- data.frame(h = meand$h, Mean = meand$RMSE, 
+                  Naive = naive$RMSE, RandomWalk = randwd$RMSE,
+                  Seas_Naive = snaived$RMSE, ETS = etsd$RMSE, 
+                  Holt = holtd$RMSE, HoltWinters = holtw$RMSE,
+                  ARIMA = arimad$RMSE, 
+                  Bagged_ETS = bagetsd$RMSE, NNAR = nnard$RMSE
+         )
+rmse_l <- gather(rmse, keycol, valuecol, all_of(gathercols))
+
+ggplot(data = rmse_l) + 
+  geom_point(aes(x = h, y = valuecol, color = keycol)) + theme_bw() +
+  ggtitle("Model Comparision", subtitle = "Root Mean Squared Error") + ylab("RMSE") +
+  xlab("Forecasting Horizon (h)") + theme(legend.position = "bottom") +
+  labs(caption = "Visualization 5: TSCV RMSE Forecast Horizon Plot")
+```
+
+Seperating the errors by forecasting horizon, it is clear that there is no single best forecasting model. Instead, the most accurate model depends on the forecasting time horizon. The most accurate forecasts are those which explicitly include seasonality: ARIMA, ETS, Bagged ETS, Holt-Winters, and Seasonal Naive. For longer time horizons, the seasonal naive method, one of the most simple forecasting method, is the most accurate forecasting method. The phemonenon of random walk methods being perferred over longer time horizons has been repeatedly noted in the literature [@why]. Given that this method simply takes the previous value from the same season, we would expect that the accuracy would go down with stronger trend.
+
+The bagged ETS method improves in-sample goodness of fit dispite few simulations being conducted due to computation constraints. The accuracy of this method will likely increase if more bootstrapped time series are generated. 
+
+Neural Network Autoregression (NNAR), despite being perhaps the most complex model used, does a poor job forecasting. Model accuracy would likely improve if more data was included in the training set. 
+
+The differences between the preferred in-sample model versus the preferred TSCV model illustrate the importance of validating forecasting models using training and testing sets to forecast out-of-sample. They also may indicate the need to have more data as model complexity grows. Further research may explore relationships between model complexity and improvement with additional training data. Heterogeneity of perferred methods across forecasting horizons illustrates the importance of that consideration. There is no single best method, and while more complex models may increase short term forecasting accuracy, the results support using a random walk technique (which includes seasonality) over longer forecasting horizons.
+
+# Conclusion
+
+This paper analyzes and compares the ability of ten time series models in forecasting US fuel ethanol consumption. After each model was defined and discussed, forecasting ability was judged using time series cross validation. 
+
+The results support previous indications of random walk models being the preferred method of forecasting over longer time horizons. More complex models, such as the ARIMA and bagged ETS have lower errors in shorter forecasting horizons, but lose accuracy as the horizon is extended. The most complex forecasting method, Neural Network Autoregression, had very high error. Accuracy would likely increase significantly as the size of the dataset increases. 
+
+These findings are significant for many stakeholders of the ethanol industry, including producers, merchants, and traders. The results illustrate the importance of proper model choice and specification and the possibility of more accurate short-term forecasts with more complex models. 
+
+Further research may increase the data set size, explore fuel ethanol consumption in other markets, or examine other forecasting methods. More accurate forecasting models may include contemporary and lagged values of relevant data, such as disposable income which may explain the total fuel consumption, or the gasoline/ethanol price ratio, which may explain ethanol blending decisions. 
+
+\newpage
+
+# Appendix
+
+```{r graphs_all, fig.height=3}
+autoplot(meanf(data_ts, h = 12)) + ggtitle("Fuel Ethanol Consumption",
+                          subtitle = "Mean Forecasting Method") + 
+  ylab("Daily Consumption (MM Barrels)") +
+  xlab("") + theme_bw() + autolayer(fitted(meanf(data_ts))) + theme(legend.position = "none")
+
+autoplot(naive(data_ts, h = 12)) + ggtitle("Fuel Ethanol Consumption",
+                          subtitle = "Naive Forecasting Method") + 
+  ylab("Daily Consumption (MM Barrels)") +
+  xlab("") + theme_bw() + autolayer(fitted(naive(data_ts))) + theme(legend.position = "none")
+
+autoplot(rwf(data_ts, h = 12, drift = TRUE)) + ggtitle("Fuel Ethanol Consumption",
+                          subtitle = "Random Walk with Drift Method") + 
+  ylab("Daily Consumption (MM Barrels)") +
+  xlab("") + theme_bw() + autolayer(fitted(rwf(data_ts, drift = TRUE))) + theme(legend.position = "none")
+
+autoplot(snaive(data_ts, h = 12)) + ggtitle("Fuel Ethanol Consumption",
+                          subtitle = "Seasonal Naive Forecasting Method") + 
+  ylab("Daily Consumption (MM Barrels)") +
+  xlab("") + theme_bw() + autolayer(fitted(snaive(data_ts))) + theme(legend.position = "none")
+
+autoplot(forecast(data_ts, h = 12)) + ggtitle("Fuel Ethanol Consumption", 
+                                             subtitle = "ETS Method") + 
+  ylab("Daily Consumption (MM Barrels)") +
+  xlab("") + theme_bw() + autolayer(fitted(forecast(data_ts))) + theme(legend.position = "none")
+
+autoplot(holt(data_ts, h = 12)) + ggtitle("Fuel Ethanol Consumption",
+                          subtitle = "Holt Method") + 
+  ylab("Daily Consumption (MM Barrels)") +
+  xlab("") + theme_bw() + autolayer(fitted(holt(data_ts))) + theme(legend.position = "none")
+
+autoplot(hw(data_ts, h = 12)) + ggtitle("Fuel Ethanol Consumption",
+                          subtitle = "Holt-Winters Model") + 
+  ylab("Daily Consumption (MM Barrels)") +
+  xlab("") + theme_bw() + autolayer(fitted(hw(data_ts))) + theme(legend.position = "none")
+
+autoplot(data_ts) + autolayer(forecast(Arima(data_ts, order=c(0,1,1), seasonal = c(0,1,1)), h=12)) +
+  ggtitle("Fuel Ethanol Consumption",subtitle = "ARIMA Method") + 
+  ylab("Daily Consumption (MM Barrels)") +
+  xlab("") + theme_bw() + autolayer(fitted(Arima(data_ts, order=c(0,1,1), seasonal = c(0,1,1)))) + theme(legend.position = "none")
+
+fit <- nnetar(data_ts)  #, lambda=0
+fcast <- forecast(fit, PI=TRUE, h=12)
+autoplot(fcast) + autolayer(fitted(fit)) + theme_bw() + 
+  ggtitle("Fuel Ethanol Consumption", subtitle = "Neural Network Autoregression (3,1,2)[12]") +
+  theme(legend.position = "none") + ylab("Daily Consumption (MM Barrels)") +
+  xlab("")
+
+```
+
+
+```{r modelcompmae, fig.height=4, echo=FALSE, warning=FALSE}
+
+keycol <- "model"
+valuecol <- "value"
+gathercols <- c("Mean", "Naive", "RandomWalk", "Seas_Naive", "Holt", "HoltWinters",
+                "ARIMA", "ETS", "Bagged_ETS", "NNAR")
+mae <- data.frame(h = meand$h, Mean = meand$MAE, 
+                  Naive = naive$MAE, RandomWalk = randwd$MAE,
+                  Seas_Naive = snaived$MAE, ETS = etsd$MAE, 
+                  Holt = holtd$MAE, HoltWinters = holtw$MAE,
+                  ARIMA = arimad$MAE, 
+                  Bagged_ETS = bagetsd$MAE, NNAR = nnard$MAE
+         )
+mae_l <- gather(mae, keycol, valuecol, all_of(gathercols))
+
+ggplot(data = mae_l) + 
+  geom_point(aes(x = h, y = valuecol, color = keycol)) + theme_bw() +
+  ggtitle("Model Comparision", subtitle = "Mean Absolute Error") + ylab("MAE") +
+  xlab("Forecasting Horizon (h)") + theme(legend.position = "bottom")
+
+```
+
+
+```{r modelcompmse, fig.height=4, echo=FALSE, warning=FALSE}
+
+keycol <- "model"
+valuecol <- "value"
+gathercols <- c("Mean", "Naive", "RandomWalk", "Seas_Naive", "Holt","HoltWinters",
+                "ARIMA", "ETS", "Bagged_ETS", "NNAR")
+mse <- data.frame(h = meand$h, Mean = meand$MSE, 
+                  Naive = naive$MSE, RandomWalk = randwd$MSE,
+                  Seas_Naive = snaived$MSE, ETS = etsd$MSE, 
+                  Holt = holtd$MSE, HoltWinters = holtw$MSE,
+                  ARIMA = arimad$MSE,
+                  Bagged_ETS = bagetsd$MSE, NNAR = nnard$MSE
+         )
+mse_l <- gather(mse, keycol, valuecol, all_of(gathercols))
+
+ggplot(data = mse_l) + 
+  geom_point(aes(x = h, y = valuecol, color = keycol)) + theme_bw() +
+  ggtitle("Model Comparision", subtitle = "Mean Squared Error") + ylab("MSE") +
+  xlab("Forecasting Horizon (h)") + theme(legend.position = "bottom")
+```
+
+
+```{r modelsum}
+summary(ets(data_ts))
+summary(holt(data_ts))
+summary(hw(data_ts))
+summary(auto.arima(data_ts))
+```
+
+\newpage
+
+# Reference
+
+\begingroup
+\setlength{\parindent}{-0.5in}  
+\setlength{\leftskip}{0.5in}
+
+<div id="refs" custom-style="Bibliography"></div>
+\endgroup
+
+
+
+
